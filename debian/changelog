@@ -1,3 +1,9 @@
+python-pykka (1.0.1-0mopidy1) unstable; urgency=low
+
+  * New upstream release.
+
+ -- Stein Magnus Jodal <stein.magnus@jodal.no>  Thu, 13 Dec 2012 00:44:16 +0100
+
 python-pykka (1.0.0-1) unstable; urgency=low
 
   * New upstream release.
