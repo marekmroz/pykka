@@ -1,6 +1,7 @@
 import threading
 import unittest
 import uuid
+import time
 
 from pykka.actor import ThreadingActor
 from pykka.registry import ActorRegistry
@@ -61,6 +62,51 @@ class EarlyStoppingActor(object):
 
     def on_stop(self):
         self.on_stop_was_called.set()
+
+
+class EarlyFailingActor(object):
+    def __init__(self, on_start_was_called):
+        super(EarlyFailingActor, self).__init__()
+        self.on_start_was_called = on_start_was_called
+
+    def on_start(self):
+        try:
+            raise RuntimeError('on_start failure')
+        finally:
+            self.on_start_was_called.set()
+
+
+class LateFailingActor(object):
+    def __init__(self, on_stop_was_called):
+        super(LateFailingActor, self).__init__()
+        self.on_stop_was_called = on_stop_was_called
+
+    def on_start(self):
+        self.stop()
+
+    def on_stop(self):
+        try:
+            raise RuntimeError('on_stop failure')
+        finally:
+            self.on_stop_was_called.set()
+
+
+class FailingOnFailureActor(object):
+    def __init__(self, on_failure_was_called):
+        super(FailingOnFailureActor, self).__init__()
+        self.on_failure_was_called = on_failure_was_called
+
+    def on_receive(self, message):
+        if message.get('command') == 'raise exception':
+            raise Exception('on_receive failure')
+        else:
+            super(FailingOnFailureActor, self).on_receive(message)
+
+    def on_failure(self, *args):
+        try:
+            raise RuntimeError('on_failure failure')
+        finally:
+            self.on_failure_was_called.set()
 
 
 class ActorTest(object):
@@ -153,11 +199,25 @@ class ActorTest(object):
         self.assertTrue(stop_event.is_set())
         self.assertFalse(another_actor.is_alive())
 
+    def test_on_start_failure_causes_actor_to_stop(self):
+        # Actor should not be alive if on_start fails.
+        start_event = self.event_class()
+        actor = self.EarlyFailingActor.start(start_event)
+        start_event.wait(5)
+        time.sleep(0.01)
+        self.assertFalse(actor.is_alive())
+
     def test_on_stop_is_called_when_actor_is_stopped(self):
         self.assertFalse(self.on_stop_was_called.is_set())
         self.actor_ref.stop()
         self.on_stop_was_called.wait(5)
         self.assertTrue(self.on_stop_was_called.is_set())
+
+    def test_on_stop_failure_causes_actor_to_stop(self):
+        stop_event = self.event_class()
+        actor = self.LateFailingActor.start(stop_event)
+        stop_event.wait(5)
+        self.assertFalse(actor.is_alive())
 
     def test_on_failure_is_called_when_exception_cannot_be_returned(self):
         self.assertFalse(self.on_failure_was_called.is_set())
@@ -165,6 +225,13 @@ class ActorTest(object):
         self.on_failure_was_called.wait(5)
         self.assertTrue(self.on_failure_was_called.is_set())
         self.assertFalse(self.on_stop_was_called.is_set())
+
+    def test_on_failure_failure_causes_actor_to_stop(self):
+        failure_event = self.event_class()
+        actor = self.FailingOnFailureActor.start(failure_event)
+        actor.tell({'command': 'raise exception'})
+        failure_event.wait(5)
+        self.assertFalse(actor.is_alive())
 
     def test_actor_is_stopped_when_unhandled_exceptions_are_raised(self):
         self.assertFalse(self.on_failure_was_called.is_set())
@@ -219,8 +286,20 @@ class ThreadingActorTest(ActorTest, unittest.TestCase):
     class EarlyStoppingActor(EarlyStoppingActor, ThreadingActor):
         pass
 
+    class EarlyFailingActor(EarlyFailingActor, ThreadingActor):
+        pass
+
+    class LateFailingActor(LateFailingActor, ThreadingActor):
+        pass
+
+    class FailingOnFailureActor(FailingOnFailureActor, ThreadingActor):
+        pass
+
     class SuperInitActor(ThreadingActor):
         pass
+
+    class DaemonActor(ThreadingActor):
+        use_daemon_thread = True
 
     def test_actor_thread_is_named_after_pykka_actor_class(self):
         alive_threads = threading.enumerate()
@@ -228,6 +307,22 @@ class ThreadingActorTest(ActorTest, unittest.TestCase):
         named_correctly = [
             name.startswith(AnActor.__name__) for name in alive_thread_names]
         self.assert_(any(named_correctly))
+
+    def test_actor_thread_is_not_daemonic_by_default(self):
+        alive_threads = threading.enumerate()
+        actor_threads = [
+            t for t in alive_threads if t.name.startswith('AnActor')]
+        self.assertEqual(1, len(actor_threads))
+        self.assertFalse(actor_threads[0].daemon)
+
+    def test_actor_thread_is_daemonic_if_use_daemon_thread_flag_is_set(self):
+        actor_ref = self.DaemonActor.start()
+        alive_threads = threading.enumerate()
+        actor_threads = [
+            t for t in alive_threads if t.name.startswith('DaemonActor')]
+        self.assertEqual(1, len(actor_threads))
+        self.assertTrue(actor_threads[0].daemon)
+        actor_ref.stop()
 
 
 if HAS_GEVENT:
@@ -238,6 +333,15 @@ if HAS_GEVENT:
             pass
 
         class EarlyStoppingActor(EarlyStoppingActor, GeventActor):
+            pass
+
+        class EarlyFailingActor(EarlyFailingActor, GeventActor):
+            pass
+
+        class LateFailingActor(LateFailingActor, GeventActor):
+            pass
+
+        class FailingOnFailureActor(FailingOnFailureActor, GeventActor):
             pass
 
         class SuperInitActor(GeventActor):

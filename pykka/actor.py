@@ -97,10 +97,10 @@ class Actor(object):
             'Actor.__init__() have not been called. '
             'Did you forget to call super() in your override?')
         _ActorRegistry.register(obj.actor_ref)
+        _logger.debug('Starting %s', obj)
         # pylint: disable = W0212
         obj._start_actor_loop()
         # pylint: enable = W0212
-        _logger.debug('Started %s', obj)
         return obj.actor_ref
 
     @staticmethod
@@ -179,7 +179,10 @@ class Actor(object):
         _ActorRegistry.unregister(self.actor_ref)
         self._actor_runnable = False
         _logger.debug('Stopped %s', self)
-        self.on_stop()
+        try:
+            self.on_stop()
+        except Exception:
+            self._handle_failure(*_sys.exc_info())
 
     def _actor_loop(self):
         """
@@ -187,7 +190,11 @@ class Actor(object):
 
         This is the method that will be executed by the thread or greenlet.
         """
-        self.on_start()
+        try:
+            self.on_start()
+        except Exception:
+            self._handle_failure(*_sys.exc_info())
+
         while self._actor_runnable:
             message = self.actor_inbox.get()
             try:
@@ -202,6 +209,10 @@ class Actor(object):
                     message['reply_to'].set_exception()
                 else:
                     self._handle_failure(*_sys.exc_info())
+                    try:
+                        self.on_failure(*_sys.exc_info())
+                    except Exception:
+                        self._handle_failure(*_sys.exc_info())
             except BaseException:
                 exception_value = _sys.exc_info()[1]
                 _logger.debug(
@@ -218,6 +229,9 @@ class Actor(object):
         For :class:`ThreadingActor`, this method is executed in the actor's own
         thread, while :meth:`__init__` is executed in the thread that created
         the actor.
+
+        If an exception is raised by this method the stack trace will be
+        logged, and the actor will stop.
         """
         pass
 
@@ -231,6 +245,9 @@ class Actor(object):
 
         For :class:`ThreadingActor` this method is executed in the actor's own
         thread, immediately before the thread exits.
+
+        If an exception is raised by this method the stack trace will be
+        logged, and the actor will stop.
         """
         pass
 
@@ -241,7 +258,6 @@ class Actor(object):
             exc_info=(exception_type, exception_value, traceback))
         _ActorRegistry.unregister(self.actor_ref)
         self._actor_runnable = False
-        self.on_failure(exception_type, exception_value, traceback)
 
     def on_failure(self, exception_type, exception_value, traceback):
         """
@@ -253,6 +269,9 @@ class Actor(object):
 
         The method's arguments are the relevant information from
         :func:`sys.exc_info`.
+
+        If an exception is raised by this method the stack trace will be
+        logged, and the actor will stop.
         """
         pass
 
@@ -307,6 +326,22 @@ class ThreadingActor(Actor):
     threads that are not Pykka actors.
     """
 
+    use_daemon_thread = False
+    """
+    A boolean value indicating whether this actor is executed on a thread that
+    is a daemon thread (:class:`True`) or not (:class:`False`). This must be
+    set before :meth:`pykka.Actor.start` is called, otherwise
+    :exc:`RuntimeError` is raised.
+
+    The entire Python program exits when no alive non-daemon threads are left.
+    This means that an actor running on a daemon thread may be interrupted at
+    any time, and there is no guarantee that cleanup will be done or that
+    :meth:`pykka.Actor.on_stop` will be called.
+
+    Actors do not inherit the daemon flag from the actor that made it. It
+    always has to be set explicitly for the actor to run on a daemonic thread.
+    """
+
     @staticmethod
     def _create_actor_inbox():
         return _queue.Queue()
@@ -318,6 +353,7 @@ class ThreadingActor(Actor):
     def _start_actor_loop(self):
         thread = _threading.Thread(target=self._actor_loop)
         thread.name = thread.name.replace('Thread', self.__class__.__name__)
+        thread.daemon = self.use_daemon_thread
         thread.start()
 
 

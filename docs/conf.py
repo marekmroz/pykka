@@ -81,7 +81,7 @@ master_doc = 'index'
 
 # General information about the project.
 project = u'Pykka'
-copyright = u'2010-2012, Stein Magnus Jodal'
+copyright = u'2010-2013, Stein Magnus Jodal'
 
 # The version info for the project you're documenting, acts as replacement for
 # |version| and |release|, also used in various other places throughout the
@@ -264,4 +264,4 @@ man_pages = [
 
 autodoc_member_order = 'bysource'
 
-extlinks = {'issue': ('http://github.com/jodal/pykka/issues/%s', 'GH-')}
+extlinks = {'issue': ('http://github.com/jodal/pykka/issues/%s', '#')}
