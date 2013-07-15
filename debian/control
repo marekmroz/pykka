@@ -18,11 +18,13 @@ Architecture: all
 Depends:
     ${python:Depends},
     ${misc:Depends},
-    ${shlibs:Depends}
+    libjs-jquery,
+    libjs-underscore
 Provides:
     ${python:Provides}
+Conflicts: python-pykka-doc
+Replaces: python-pykka-doc
 Suggests:
-    python-pykka-doc,
     python-gevent,
     python-eventlet
 XB-Python-Version: ${python:Versions}
@@ -40,18 +42,3 @@ Description: Actor model library for Python
  networking library that uses greenlet to provide a high-level synchronous API
  on top of libevent event loop. It is generally faster, but doesn't like
  playing with other threads.
-
-Package: python-pykka-doc
-Section: doc
-Architecture: all
-Depends:
-    ${misc:Depends},
-    libjs-jquery,
-    libjs-underscore
-Recommends: python-pykka
-Replaces: python-pykka (<< 0.15-2)
-Description: Actor model library for Python - documentation
- The goal of Pykka is to provide easy to use concurrency abstractions for
- Python by using the actor model.
- .
- This package contains documentation for Pykka.

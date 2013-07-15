@@ -1,0 +1,11 @@
+#!/bin/sh
+
+set -e
+
+# Remove directory symlinks created by old python-pykka-doc
+rm -rf /usr/share/doc/python-pykka/html
+rm -rf /usr/share/doc/python-pykka/rst
+
+#DEBHELPER#
+
+exit 0
