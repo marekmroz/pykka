@@ -1,3 +1,13 @@
+python-pykka (1.2.0-0mopidy1) unstable; urgency=low
+
+  * New upstream release.
+  * Add python-eventlet to Suggests.
+  * Bump Standards-Version to 3.9.4.
+  * Update Homepage and Vcs-Browser URLs.
+  * Update copyright years.
+
+ -- Stein Magnus Jodal <stein.magnus@jodal.no>  Mon, 15 Jul 2013 04:05:01 +0200
+
 python-pykka (1.1.0-0mopidy1) unstable; urgency=low
 
   * New upstream release.

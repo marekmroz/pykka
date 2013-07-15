@@ -6,10 +6,10 @@ Build-Depends:
     debhelper (>= 7.0.50~),
     python-support,
     python-sphinx (>= 1.0)
-Standards-Version: 3.9.3
-Homepage: http://jodal.github.com/pykka/
+Standards-Version: 3.9.4
+Homepage: http://www.pykka.org/
 Vcs-Git: git://github.com/jodal/pykka.git
-Vcs-Browser: http://github.com/jodal/pykka
+Vcs-Browser: https://github.com/jodal/pykka
 XS-Python-Version: >= 2.6
 X-Python-Version: >= 2.6
 X-Python3-Version: >= 3.0
@@ -22,7 +22,8 @@ Depends:
     ${shlibs:Depends}
 Suggests:
     python-pykka-doc,
-    python-gevent
+    python-gevent,
+    python-eventlet
 Description: Actor model library for Python
  The goal of Pykka is to provide easy to use concurrency abstractions for
  Python by using the actor model.
