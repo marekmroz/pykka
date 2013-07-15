@@ -33,16 +33,21 @@ Rules of the actor model
   internally to protect its own state.
 
 
-Two implementations
-===================
+The actor implementations
+=========================
 
-Pykka's actor API comes with to two different implementations:
+Pykka's actor API comes with the following implementations:
 
 - Threads: Each ``ThreadingActor`` is executed by a regular thread, i.e.
   ``threading.Thread``. As handles for future results, it uses
   ``ThreadingFuture`` which is a thin wrapper around a ``Queue.Queue``. It has
   no dependencies outside Python itself. ``ThreadingActor`` plays well
   together with non-actor threads.
+
+  Note: If you monkey patch the standard library with ``gevent`` or
+  ``eventlet`` you can still use ``ThreadingActor`` and ``ThreadingFuture``.
+  Python's threads will transparently use the underlying implementation
+  provided by gevent or Eventlet.
 
 - gevent: Each ``GeventActor`` is executed by a gevent greenlet. `gevent
   <http://www.gevent.org/>`_ is a coroutine-based Python networking library
@@ -53,8 +58,12 @@ Pykka's actor API comes with to two different implementations:
   candidate, this is no longer an issue. Pykka works with both gevent 0.13 and
   1.0.
 
+- Eventlet: Each ``EventletActor`` is executed by a Eventlet greenlet. Pykka is
+  tested with Eventlet 0.12.1.
+
 Pykka has an extensive test suite, and is tested on CPython 2.6, 2.7, and 3.2+,
-as well as PyPy. gevent is currently not available for CPython 3 or PyPy.
+as well as PyPy. gevent and eventlet are currently not available for CPython
+3.x or PyPy.
 
 
 A basic actor
@@ -149,22 +158,45 @@ to other actors.
 Replying to messages
 --------------------
 
-If a message is sent using ``actor_ref.ask()`` an extra field, ``reply_to`` is
-added to the message dict, containing an unresolved future. To reply to the
-sender of the message, simply ``set()`` the answer on the ``reply_to`` future::
+If a message is sent using ``actor_ref.ask()`` you can reply to the sender of
+the message by simply returning a value from ``on_receive`` method::
 
     import pykka
 
     class Greeter(pykka.ThreadingActor):
         def on_receive(self, message):
-            if 'reply_to' in message:
-                message['reply_to'].set('Hi there!')
+            return 'Hi there!'
 
     actor_ref = Greeter.start()
 
     answer = actor_ref.ask('Hi?')
     print(answer)
     # => 'Hi there!'
+
+``None`` is a valid response so if you return ``None`` explicitly, or don't
+return at all, a response containing ``None`` will be returned to the sender.
+
+From the point of view of the actor it doesn't matter whether the message was
+sent using ``actor_ref.tell()`` or ``actor_ref.ask()`` . When the sender
+doesn't expect a response the ``on_receive`` return value will be ignored.
+
+The situation is similar in regard to exceptions: when ``actor_ref.ask()`` is
+used and you raise an exception from within ``on_receive`` method it will
+propagate to the sender::
+
+    import pykka
+
+    class Raiser(pykka.ThreadingActor):
+        def on_receive(self, message):
+            raise Exception('Oops')
+
+    actor_ref = Raiser.start()
+
+    try:
+        actor_ref.ask('How are you?')
+    except Exception as e:
+        print(repr(e))
+        # => Exception('Oops')
 
 
 Actor proxies
@@ -254,8 +286,8 @@ through a proxy. For this case, Pykka supports "traversable attributes". By
 marking an actor attribute as traversable, Pykka will not return the attribute
 when accessed, but wrap it in a new proxy which is returned instead.
 
-To mark an attribute as traversable, simply set the :attr:`pykka_traversable`
-attribute to :class:`True`::
+To mark an attribute as traversable, simply set the ``pykka_traversable``
+attribute to ``True``::
 
     import pykka
 
@@ -306,10 +338,16 @@ Installation
 
 Install Pykka's dependencies:
 
-- Python 2.6, 2.7, or 3.2+. Note that gevent is not available on Python 3.
+- Python 2.6, 2.7, or 3.2+
 
-- Optionally, `gevent <http://www.gevent.org/>`_, if you want to use gevent
-  based actors from ``pykka.gevent``.
+- Optionally, Python 2.6/2.7 only:
+
+  - `gevent <http://www.gevent.org/>`_, if you want to use gevent based actors
+    from ``pykka.gevent``.
+
+  - `eventlet <http://eventlet.net/>`_, if you want to use eventlet based actors
+    from ``pykka.eventlet``. Eventlet is known to work with PyPy 2.0 as well
+    but Pykka is not tested with it yet.
 
 To install Pykka you can use pip::
 
@@ -338,6 +376,8 @@ Project resources
 - `Source code <https://github.com/jodal/pykka>`_
 - `Issue tracker <https://github.com/jodal/pykka/issues>`_
 - `CI server <https://travis-ci.org/jodal/pykka>`_
-- `Download development snapshot <https://github.com/jodal/pykka/tarball/master#egg=pykka-dev>`_
+- `Download development snapshot
+  <https://github.com/jodal/pykka/tarball/master#egg=pykka-dev>`_
 
-.. image:: https://secure.travis-ci.org/jodal/pykka.png?branch=master
+.. image:: https://travis-ci.org/jodal/pykka.png?branch=master
+    :target: https://travis-ci.org/jodal/pykka

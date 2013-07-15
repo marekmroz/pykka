@@ -1,17 +1,32 @@
+import collections as _collections
+import functools as _functools
 import sys as _sys
 
 try:
     # Python 2.x
     import Queue as _queue
+    _basestring = basestring
     PY3 = False
 except ImportError:
     # Python 3.x
-    # pylint: disable = F0401
     import queue as _queue  # noqa
-    # pylint: enable = F0401
+    _basestring = str
     PY3 = True
 
 from pykka.exceptions import Timeout as _Timeout
+
+
+def _is_iterable(x):
+    return (
+        isinstance(x, _collections.Iterable) and
+        not isinstance(x, _basestring))
+
+
+def _map(func, *iterables):
+    if len(iterables) == 1 and not _is_iterable(iterables[0]):
+        return func(iterables[0])
+    else:
+        return list(map(func, *iterables))
 
 
 class Future(object):
@@ -23,6 +38,10 @@ class Future(object):
 
     To get hold of the encapsulated value, call :meth:`Future.get`.
     """
+
+    def __init__(self):
+        super(Future, self).__init__()
+        self._get_hook = None
 
     def get(self, timeout=None):
         """
@@ -46,6 +65,8 @@ class Future(object):
         :raise: encapsulated value if it is an exception
         :return: encapsulated value if it is not an exception
         """
+        if self._get_hook is not None:
+            return self._get_hook(timeout)
         raise NotImplementedError
 
     def set(self, value=None):
@@ -54,6 +75,7 @@ class Future(object):
 
         :param value: the encapsulated value or nothing
         :type value: any picklable object or :class:`None`
+        :raise: an exception if set is called multiple times
         """
         raise NotImplementedError
 
@@ -79,6 +101,163 @@ class Future(object):
         """
         raise NotImplementedError
 
+    def set_get_hook(self, func):
+        """
+        Set a function to be executed when :meth:`get` is called.
+
+        The function will be called when :meth:`get` is called, with the
+        ``timeout`` value as the only argument. The function's return value
+        will be returned from :meth:`get`.
+
+        .. versionadded:: 1.2
+
+        :param func: called to produce return value of :meth:`get`
+        :type func: function accepting a timeout value
+        """
+        self._get_hook = func
+
+    def filter(self, func):
+        """
+        Return a new future with only the items passing the predicate function.
+
+        If the future's value is an iterable, :meth:`filter` will return a new
+        future whose value is another iterable with only the items from the
+        first iterable for which ``func(item)`` is true. If the future's value
+        isn't an iterable, a :exc:`TypeError` will be raised when :meth:`get`
+        is called.
+
+        Example::
+
+            >>> import pykka
+            >>> f = pykka.ThreadingFuture()
+            >>> g = f.filter(lambda x: x > 10)
+            >>> g
+            <pykka.future.ThreadingFuture at ...>
+            >>> f.set(range(5, 15))
+            >>> f.get()
+            [5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+            >>> g.get()
+            [11, 12, 13, 14]
+
+        .. versionadded:: 1.2
+        """
+        future = self.__class__()
+        future.set_get_hook(lambda timeout: list(filter(
+            func, self.get(timeout))))
+        return future
+
+    def join(self, *futures):
+        """
+        Return a new future with a list of the result of multiple futures.
+
+        One or more futures can be passed as arguments to :meth:`join`. The new
+        future returns a list with the results from all the joined futures.
+
+        Example::
+
+            >>> import pykka
+            >>> a = pykka.ThreadingFuture()
+            >>> b = pykka.ThreadingFuture()
+            >>> c = pykka.ThreadingFuture()
+            >>> f = a.join(b, c)
+            >>> a.set('def')
+            >>> b.set(123)
+            >>> c.set(False)
+            >>> f.get()
+            ['def', 123, False]
+
+        .. versionadded:: 1.2
+        """
+        future = self.__class__()
+        future.set_get_hook(lambda timeout: [
+            f.get(timeout) for f in [self] + list(futures)])
+        return future
+
+    def map(self, func):
+        """
+        Return a new future with the result of the future passed through a
+        function.
+
+        If the future's result is a single value, it is simply passed to the
+        function. If the future's result is an iterable, the function is
+        applied to each item in the iterable.
+
+        Example::
+
+            >>> import pykka
+            >>> f = pykka.ThreadingFuture()
+            >>> g = f.map(lambda x: x + 10)
+            >>> f.set(30)
+            >>> g.get()
+            40
+
+            >>> f = pykka.ThreadingFuture()
+            >>> g = f.map(lambda x: x + 10)
+            >>> f.set([30, 300, 3000])
+            >>> g.get()
+            [40, 310, 3010]
+
+        .. versionadded:: 1.2
+        """
+        future = self.__class__()
+        future.set_get_hook(lambda timeout: _map(func, self.get(timeout)))
+        return future
+
+    def reduce(self, func, *args):
+        """
+        reduce(func[, initial])
+
+        Return a new future with the result of reducing the future's iterable
+        into a single value.
+
+        The function of two arguments is applied cumulatively to the items of
+        the iterable, from left to right. The result of the first function call
+        is used as the first argument to the second function call, and so on,
+        until the end of the iterable. If the future's value isn't an iterable,
+        a :exc:`TypeError` is raised.
+
+        :meth:`reduce` accepts an optional second argument, which will be used
+        as an initial value in the first function call. If the iterable is
+        empty, the initial value is returned.
+
+        Example::
+
+            >>> import pykka
+            >>> f = pykka.ThreadingFuture()
+            >>> g = f.reduce(lambda x, y: x + y)
+            >>> f.set(['a', 'b', 'c'])
+            >>> g.get()
+            'abc'
+
+            >>> f = pykka.ThreadingFuture()
+            >>> g = f.reduce(lambda x, y: x + y)
+            >>> f.set([1, 2, 3])
+            >>> (1 + 2) + 3
+            6
+            >>> g.get()
+            6
+
+            >>> f = pykka.ThreadingFuture()
+            >>> g = f.reduce(lambda x, y: x + y, 5)
+            >>> f.set([1, 2, 3])
+            >>> ((5 + 1) + 2) + 3
+            11
+            >>> g.get()
+            11
+
+            >>> f = pykka.ThreadingFuture()
+            >>> g = f.reduce(lambda x, y: x + y, 5)
+            >>> f.set([], 5)
+            >>> g.get()
+            5
+
+        .. versionadded:: 1.2
+        """
+        future = self.__class__()
+        future.set_get_hook(lambda timeout: _functools.reduce(
+            func, self.get(timeout), *args))
+        return future
+
 
 class ThreadingFuture(Future):
     """
@@ -100,10 +279,15 @@ class ThreadingFuture(Future):
 
     def __init__(self):
         super(ThreadingFuture, self).__init__()
-        self._queue = _queue.Queue()
+        self._queue = _queue.Queue(maxsize=1)
         self._data = None
 
     def get(self, timeout=None):
+        try:
+            return super(ThreadingFuture, self).get(timeout=timeout)
+        except NotImplementedError:
+            pass
+
         try:
             if self._data is None:
                 self._data = self._queue.get(True, timeout)
@@ -112,15 +296,14 @@ class ThreadingFuture(Future):
                 if PY3:
                     raise exc_info[1].with_traceback(exc_info[2])
                 else:
-                    exec(  # pylint: disable = W0122
-                        'raise exc_info[0], exc_info[1], exc_info[2]')
+                    exec('raise exc_info[0], exc_info[1], exc_info[2]')
             else:
                 return self._data['value']
         except _queue.Empty:
             raise _Timeout('%s seconds' % timeout)
 
     def set(self, value=None):
-        self._queue.put({'value': value})
+        self._queue.put({'value': value}, block=False)
 
     def set_exception(self, exc_info=None):
         if isinstance(exc_info, BaseException):

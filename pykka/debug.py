@@ -34,7 +34,7 @@ def log_thread_tracebacks(*args, **kwargs):
     Signal handler caveats:
 
     - The function *must* be registered as a signal handler by your main
-      thread. If not, :func:`signal.signal` will raise an :exc:`ValueError`.
+      thread. If not, :func:`signal.signal` will raise a :exc:`ValueError`.
 
     - All signals in Python are handled by the main thread. Thus, the signal
       will only be handled, and the tracebacks logged, if your main thread is
@@ -50,6 +50,8 @@ def log_thread_tracebacks(*args, **kwargs):
 
     For a complete example of how to use this, see
     ``examples/deadlock_debugging.py`` in Pykka's source code.
+
+    .. versionadded:: 1.1
     """
 
     thread_names = dict((t.ident, t.name) for t in _threading.enumerate())

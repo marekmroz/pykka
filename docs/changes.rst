@@ -2,6 +2,68 @@
 Changes
 =======
 
+v1.2.0 (2013-07-15)
+===================
+
+- Enforce that multiple calls to :meth:`pykka.Future.set` raises an exception.
+  This was already the case for some implementations. The exception raises is
+  not specified.
+
+- Add :meth:`pykka.Future.set_get_hook`.
+
+- Add :meth:`~Pykka.Future.filter`, :meth:`~pykka.Future.join`,
+  :meth:`~pykka.Future.map`, and :meth:`~pykka.Future.reduce` as convenience
+  methods using the new :meth:`~pykka.Future.set_get_hook` method.
+
+- Add support for running actors based on eventlet greenlets. See
+  :mod:`pykka.eventlet` for details. Thanks to Jakub Stasiak for the
+  implementation.
+
+- Update documentation to reflect that the ``reply_to`` field on the message is
+  private to Pykka. Actors should reply to messages simply by returning the
+  response from :meth:`~pykka.Actor.on_receive`. The internal field is renamed
+  to ``pykka_reply_to`` a to avoid collisions with other message fields. It is
+  also removed from the message before the message is passed to
+  :meth:`~pykka.Actor.on_receive`. Thanks to Jakub Stasiak.
+
+- When messages are left in the actor inbox after the actor is stopped, those
+  messages that are expecting a reply is now rejected by replying with an
+  :exc:`~pykka.ActorDeadError` exception.  This causes other actors blocking on
+  the returned :class:`~pykka.Future` without a timeout to raise the exception
+  instead of waiting forever. Thanks to Jakub Stasiak.
+
+  This makes the behavior of messaging an actor around the time it is stopped
+  more consistent:
+
+  - Messaging an already dead actor immediately raises
+    :exc:`~pykka.ActorDeadError`.
+
+  - Messaging an alive actor that is stopped before it processes the message
+    will cause the reply future to raise :exc:`~pykka.ActorDeadError`.
+
+  Similarly, if you ask an actor to stop multiple times, and block on the
+  responses, all the messages will now get an reply. Previously only the first
+  message got a reply, potentially making the application wait forever on
+  replies to the subsequent stop messages.
+
+- When :meth:`~pykka.ActorRef.ask` is used to asynchronously message a dead
+  actor (e.g. ``block`` set to :class:`False`), it will no longer immediately
+  raise :exc:`~pykka.ActorDeadError`. Instead, it will return a future and
+  fail the future with the :exc:`~pykka.ActorDeadError` exception. This makes
+  the interface more consistent, as you'll have one instead of two ways the
+  call can raise exceptions under normal conditions. If
+  :meth:`~pykka.ActorRef.ask` is called synchronously (e.g. ``block`` set to
+  :class:`True`), the behavior is unchanged.
+
+- A change to :meth:`~pykka.ActorRef.stop` reduces the likelyhood of a race
+  condition when asking an actor to stop multiple times by not checking if the
+  actor is dead before asking it to stop, but instead just go ahead and leave
+  it to :meth:`~pykka.ActorRef.tell` to do the alive-or-dead check a single
+  time, and as late as possible.
+
+- Change :meth:`~pykka.ActorRef.is_alive` to check the actor's runnable flag
+  instead of checking if the actor is registrered in the actor registry.
+
 
 v1.1.0 (2013-01-19)
 ===================

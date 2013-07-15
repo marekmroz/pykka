@@ -2,12 +2,6 @@ import unittest
 
 from pykka.actor import ThreadingActor
 
-try:
-    from pykka.gevent import GeventActor
-    HAS_GEVENT = True
-except ImportError:
-    HAS_GEVENT = False
-
 
 class ActorWithMethods(object):
     cat = 'dog'
@@ -104,7 +98,9 @@ class ThreadingDynamicMethodCallTest(DynamicMethodCallTest, unittest.TestCase):
         pass
 
 
-if HAS_GEVENT:
+try:
+    from pygga.gevent import GeventActor
+
     class GeventStaticMethodCallTest(StaticMethodCallTest, unittest.TestCase):
         class ActorWithMethods(ActorWithMethods, GeventActor):
             pass
@@ -113,3 +109,22 @@ if HAS_GEVENT:
             DynamicMethodCallTest, unittest.TestCase):
         class ActorExtendableAtRuntime(ActorExtendableAtRuntime, GeventActor):
             pass
+except ImportError:
+    pass
+
+
+try:
+    from pygga.eventlet import EventletActor
+
+    class EventletStaticMethodCallTest(
+            StaticMethodCallTest, unittest.TestCase):
+        class ActorWithMethods(ActorWithMethods, EventletActor):
+            pass
+
+    class EventletDynamicMethodCallTest(
+            DynamicMethodCallTest, unittest.TestCase):
+        class ActorExtendableAtRuntime(
+                ActorExtendableAtRuntime, EventletActor):
+            pass
+except ImportError:
+    pass

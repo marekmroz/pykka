@@ -2,12 +2,6 @@ import unittest
 
 from pykka.actor import ThreadingActor
 
-try:
-    from pykka.gevent import GeventActor
-    HAS_GEVENT = True
-except ImportError:
-    HAS_GEVENT = False
-
 
 class SomeObject(object):
     pykka_traversable = False
@@ -42,9 +36,7 @@ class FieldAccessTest(object):
 
     def test_private_field_access_raises_exception(self):
         try:
-            # pylint: disable = W0212
             self.proxy._private_field.get()
-            # pylint: enable = W0212
             self.fail('Should raise AttributeError exception')
         except AttributeError:
             pass
@@ -55,12 +47,26 @@ class FieldAccessTest(object):
         self.assertEqual('bar.baz', self.proxy.bar.baz.get())
 
 
-class ThreadingFieldAccessTest(FieldAccessTest, unittest.TestCase):
-    class ActorWithFields(ActorWithFields, ThreadingActor):
-        pass
-
-
-if HAS_GEVENT:
-    class GeventFieldAccessTest(FieldAccessTest, unittest.TestCase):
-        class ActorWithFields(ActorWithFields, GeventActor):
+def ConcreteFieldAccessTest(actor_class):
+    class C(FieldAccessTest, unittest.TestCase):
+        class ActorWithFields(ActorWithFields, actor_class):
             pass
+    C.__name__ = '%sFieldAccessTest' % actor_class.__name__
+    return C
+
+
+ThreadingFieldAccessTest = ConcreteFieldAccessTest(ThreadingActor)
+
+
+try:
+    from pykka.gevent import GeventActor
+    GeventFieldAccessTest = ConcreteFieldAccessTest(GeventActor)
+except ImportError:
+    pass
+
+
+try:
+    from pykka.eventlet import EventletActor
+    EventletFieldAccessTest = ConcreteFieldAccessTest(EventletActor)
+except ImportError:
+    pass

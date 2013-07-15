@@ -8,9 +8,7 @@ try:
     import Queue as _queue
 except ImportError:
     # Python 3.x
-    # pylint: disable = F0401
     import queue as _queue  # noqa
-    # pylint: enable = F0401
 
 from pykka.exceptions import ActorDeadError as _ActorDeadError
 from pykka.future import ThreadingFuture as _ThreadingFuture
@@ -98,9 +96,7 @@ class Actor(object):
             'Did you forget to call super() in your override?')
         _ActorRegistry.register(obj.actor_ref)
         _logger.debug('Starting %s', obj)
-        # pylint: disable = W0212
         obj._start_actor_loop()
-        # pylint: enable = W0212
         return obj.actor_ref
 
     @staticmethod
@@ -130,9 +126,9 @@ class Actor(object):
     #: The actor's :class:`ActorRef` instance.
     actor_ref = None
 
-    #: Wether or not the actor should continue processing messages. Use
-    #: :meth:`stop` to change it.
-    _actor_runnable = True
+    #: A :class:`threading.Event` representing whether or not the actor should
+    #: continue processing messages. Use :meth:`stop` to change it.
+    actor_stopped = None
 
     def __init__(self, *args, **kwargs):
         """
@@ -146,15 +142,17 @@ class Actor(object):
 
         Or call you superclass directly::
 
-            pykka.ThreadingActor.__init__()
+            pykka.ThreadingActor.__init__(self)
             # or
-            pykka.gevent.GeventActor.__init__()
+            pykka.gevent.GeventActor.__init__(self)
 
         :meth:`__init__` is called before the actor is started and registered
         in :class:`ActorRegistry <pykka.ActorRegistry>`.
         """
         self.actor_urn = _uuid.uuid4().urn
         self.actor_inbox = self._create_actor_inbox()
+        self.actor_stopped = _threading.Event()
+
         self.actor_ref = ActorRef(self)
 
     def __str__(self):
@@ -167,8 +165,7 @@ class Actor(object):
         """
         Stop the actor.
 
-        The actor will finish processing any messages already in its queue
-        before stopping. It may not be restarted.
+        It's equivalent to calling :meth:`ActorRef.stop` with ``block=False``.
         """
         self.actor_ref.tell({'command': 'pykka_stop'})
 
@@ -177,7 +174,7 @@ class Actor(object):
         Stops the actor immediately without processing the rest of the inbox.
         """
         _ActorRegistry.unregister(self.actor_ref)
-        self._actor_runnable = False
+        self.actor_stopped.set()
         _logger.debug('Stopped %s', self)
         try:
             self.on_stop()
@@ -195,18 +192,20 @@ class Actor(object):
         except Exception:
             self._handle_failure(*_sys.exc_info())
 
-        while self._actor_runnable:
+        while not self.actor_stopped.is_set():
             message = self.actor_inbox.get()
+            reply_to = None
             try:
+                reply_to = message.pop('pykka_reply_to', None)
                 response = self._handle_receive(message)
-                if 'reply_to' in message:
-                    message['reply_to'].set(response)
+                if reply_to:
+                    reply_to.set(response)
             except Exception:
-                if 'reply_to' in message:
+                if reply_to:
                     _logger.debug(
                         'Exception returned from %s to caller:' % self,
                         exc_info=_sys.exc_info())
-                    message['reply_to'].set_exception()
+                    reply_to.set_exception()
                 else:
                     self._handle_failure(*_sys.exc_info())
                     try:
@@ -220,6 +219,17 @@ class Actor(object):
                     (repr(exception_value), self))
                 self._stop()
                 _ActorRegistry.stop_all()
+
+        while not self.actor_inbox.empty():
+            msg = self.actor_inbox.get()
+            reply_to = msg.pop('pykka_reply_to', None)
+            if reply_to:
+                if msg.get('command') == 'pykka_stop':
+                    reply_to.set(None)
+                else:
+                    reply_to.set_exception(_ActorDeadError(
+                        '%s stopped before handling the message' %
+                        self.actor_ref))
 
     def on_start(self):
         """
@@ -257,7 +267,7 @@ class Actor(object):
             'Unhandled exception in %s:' % self,
             exc_info=(exception_type, exception_value, traceback))
         _ActorRegistry.unregister(self.actor_ref)
-        self._actor_runnable = False
+        self.actor_stopped.set()
 
     def on_failure(self, exception_type, exception_value, traceback):
         """
@@ -378,11 +388,15 @@ class ActorRef(object):
     #: See :attr:`Actor.actor_inbox`.
     actor_inbox = None
 
+    #: See :attr:`Actor.actor_stopped`.
+    actor_stopped = None
+
     def __init__(self, actor):
         self._actor = actor
         self.actor_class = actor.__class__
         self.actor_urn = actor.actor_urn
         self.actor_inbox = actor.actor_inbox
+        self.actor_stopped = actor.actor_stopped
 
     def __repr__(self):
         return '<ActorRef for %s>' % str(self)
@@ -397,14 +411,14 @@ class ActorRef(object):
         """
         Check if actor is alive.
 
-        This is based on whether the actor is registered in the actor registry
-        or not. The actor is not guaranteed to be alive and responding even
-        though :meth:`is_alive` returns :class:`True`.
+        This is based on the actor's stopped flag. The actor is not guaranteed
+        to be alive and responding even though :meth:`is_alive` returns
+        :class:`True`.
 
         :return:
             Returns :class:`True` if actor is alive, :class:`False` otherwise.
         """
-        return _ActorRegistry.get_by_urn(self.actor_urn) is not None
+        return not self.actor_stopped.is_set()
 
     def tell(self, message):
         """
@@ -446,15 +460,16 @@ class ActorRef(object):
         :param timeout: seconds to wait before timeout if blocking
         :type timeout: float or :class:`None`
 
-        :raise: :exc:`pykka.Timeout` if timeout is reached
-        :raise: :exc:`pykka.ActorDeadError` if actor is not available
-        :return: :class:`pykka.Future` or response
+        :raise: :exc:`pykka.Timeout` if timeout is reached if blocking
+        :raise: any exception returned by the receiving actor if blocking
+        :return: :class:`pykka.Future`, or response if blocking
         """
-        # pylint: disable = W0212
         future = self.actor_class._create_future()
-        # pylint: enable = W0212
-        message['reply_to'] = future
-        self.tell(message)
+        message['pykka_reply_to'] = future
+        try:
+            self.tell(message)
+        except _ActorDeadError:
+            future.set_exception()
         if block:
             return future.get(timeout=timeout)
         else:
@@ -464,19 +479,38 @@ class ActorRef(object):
         """
         Send a message to the actor, asking it to stop.
 
-        The actor will finish processing any messages already in its queue
-        before stopping. It may not be restarted.
+        Returns :class:`True` if actor is stopped or was being stopped at the
+        time of the call. :class:`False` if actor was already dead. If
+        ``block`` is :class:`False`, it returns a future wrapping the result.
+
+        Messages sent to the actor before the actor is asked to stop will
+        be processed normally before it stops.
+
+        Messages sent to the actor after the actor is asked to stop will
+        be replied to with :exc:`pykka.ActorDeadError` after it stops.
+
+        The actor may not be restarted.
 
         ``block`` and ``timeout`` works as for :meth:`ask`.
 
-        :return: :class:`True` if actor is stopped. :class:`False` if actor was
-            already dead.
+        :return: :class:`pykka.Future`, or a boolean result if blocking
         """
-        if self.is_alive():
-            self.ask({'command': 'pykka_stop'}, block, timeout)
-            return True
+        ask_future = self.ask({'command': 'pykka_stop'}, block=False)
+
+        def _stop_result_converter(timeout):
+            try:
+                ask_future.get(timeout=timeout)
+                return True
+            except _ActorDeadError:
+                return False
+
+        converted_future = ask_future.__class__()
+        converted_future.set_get_hook(_stop_result_converter)
+
+        if block:
+            return converted_future.get(timeout=timeout)
         else:
-            return False
+            return converted_future
 
     def proxy(self):
         """

@@ -2,11 +2,9 @@ from __future__ import absolute_import
 
 import sys as _sys
 
-# pylint: disable = E0611
 import gevent as _gevent
 import gevent.event as _gevent_event
 import gevent.queue as _gevent_queue
-# pylint: enable = E0611
 
 from pykka import Timeout as _Timeout
 from pykka.actor import Actor as _Actor
@@ -34,11 +32,17 @@ class GeventFuture(_Future):
 
     def get(self, timeout=None):
         try:
+            return super(GeventFuture, self).get(timeout=timeout)
+        except NotImplementedError:
+            pass
+
+        try:
             return self.async_result.get(timeout=timeout)
         except _gevent.Timeout as e:
             raise _Timeout(e)
 
     def set(self, value=None):
+        assert not self.async_result.ready(), 'value has already been set'
         self.async_result.set(value)
 
     def set_exception(self, exc_info=None):
