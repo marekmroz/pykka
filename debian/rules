@@ -8,6 +8,7 @@
 
 override_dh_clean:
 	make -C docs/ clean
+	rm -rf dist/ MANIFEST
 	dh_clean
 
 override_dh_installchangelogs:
