@@ -5,6 +5,7 @@ python-pykka (1.2.0-0mopidy2) unstable; urgency=low
   * Bump debhelper compat level to 8.
   * Build package for Python 3 too.
   * Update copyright file format, refer to common-licenses.
+  * Use dh_sphinxdoc to build docs.
 
  -- Stein Magnus Jodal <stein.magnus@jodal.no>  Thu, 18 Jul 2013 23:40:14 +0200
 

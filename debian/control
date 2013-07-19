@@ -18,9 +18,8 @@ Package: python-pykka
 Architecture: all
 Depends:
     ${python:Depends},
-    ${misc:Depends},
-    libjs-jquery,
-    libjs-underscore
+    ${sphinxdoc:Depends},
+    ${misc:Depends}
 Conflicts: python-pykka-doc
 Replaces: python-pykka-doc
 Suggests:
@@ -41,9 +40,8 @@ Package: python3-pykka
 Architecture: all
 Depends:
     ${python3:Depends},
-    ${misc:Depends},
-    libjs-jquery,
-    libjs-underscore
+    ${sphinxdoc:Depends},
+    ${misc:Depends}
 Description: Actor model library for Python (Python 3)
  Pykka is a Python implementation of the actor model. The actor model
  introduces some simple rules to control the sharing of state and cooperation
