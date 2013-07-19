@@ -3,6 +3,7 @@ python-pykka (1.2.0-0mopidy2) unstable; urgency=low
   * Convert to dh_python2.
   * Merge main and documentation package.
   * Bump debhelper compat level to 8.
+  * Build package for Python 3 too.
 
  -- Stein Magnus Jodal <stein.magnus@jodal.no>  Thu, 18 Jul 2013 23:40:14 +0200
 

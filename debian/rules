@@ -3,13 +3,32 @@
 # Uncomment this to turn on verbose mode.
 #export DH_VERBOSE=1
 
-%:
-	dh --with python2 $@
+PYTHON2=$(shell pyversions -vr)
+PYTHON3=$(shell py3versions -vr)
 
-override_dh_clean:
-	make -C docs/ clean
-	rm -rf dist/ MANIFEST
-	dh_clean
+%:
+	dh $@ --with python2,python3
+
+ifeq (,$(filter nocheck,$(DEB_BUILD_OPTIONS)))
+test-python%:
+	# Want to make testsuite run without nosetests, maybe with 'setup.py
+	# test' before enabling tests as part of the build.
+	#python$* setup.py test -vv
+
+override_dh_auto_test: $(PYTHON2:%=test-python%) $(PYTHON3:%=test-python%)
+endif
+
+build-python%:
+	python$* setup.py build
+
+override_dh_auto_build: $(PYTHON3:%=build-python%)
+	dh_auto_build
+
+install-python%:
+	python$* setup.py install --root=$(CURDIR)/debian/tmp --install-layout=deb
+
+override_dh_auto_install: $(PYTHON3:%=install-python%)
+	dh_auto_install
 
 override_dh_installchangelogs:
 	dh_installchangelogs docs/changes.rst
@@ -17,3 +36,11 @@ override_dh_installchangelogs:
 override_dh_installdocs:
 	make -C docs/ clean html
 	dh_installdocs
+
+override_dh_auto_clean:
+	dh_auto_clean
+	make -C docs/ clean
+	rm -rf build
+	rm -rf dist
+	rm -rf MANIFEST
+	rm -rf *.egg-info

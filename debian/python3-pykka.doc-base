@@ -1,0 +1,12 @@
+Document: python3-pykka
+Title: python3-pykka documentation
+Author: Stein Magnus Jodal
+Section: Programming
+
+Format: HTML
+Index: /usr/share/doc/python3-pykka/html/index.html
+Files: /usr/share/doc/python3-pykka/html/*.html
+
+Format: Text
+Index: /usr/share/doc/python3-pykka/rst/index.txt
+Files: /usr/share/doc/python3-pykka/rst/*.txt
