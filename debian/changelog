@@ -1,6 +1,7 @@
 python-pykka (1.2.0-1) unstable; urgency=low
 
   * In preinst, only remove symlinks if the files exists and are symlinks.
+  * Include part of the Apache 2 license in debian/copyright.
 
  -- Stein Magnus Jodal <stein.magnus@jodal.no>  Sat, 20 Jul 2013 22:06:33 +0200
 
