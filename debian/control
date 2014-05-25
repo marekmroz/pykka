@@ -1,6 +1,6 @@
 Source: python-pykka
 Section: python
-Priority: extra
+Priority: optional
 Maintainer: Stein Magnus Jodal <stein.magnus@jodal.no>
 Build-Depends:
     debhelper (>= 8.0.0),
