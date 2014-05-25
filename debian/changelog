@@ -2,6 +2,7 @@ python-pykka (1.2.0-2) unstable; urgency=medium
 
   * Change Priority from extra to optional. Lots of packages with Priority
     optional is depending on this package.
+  * Bump Standards-Version to 3.9.5.
 
  -- Stein Magnus Jodal <stein.magnus@jodal.no>  Sun, 25 May 2014 20:14:24 +0200
 
