@@ -2,6 +2,7 @@ python-pykka (1.2.1-1) unstable; urgency=medium
 
   * New upstream release.
   * Bump Standards-Version to 3.9.6.
+  * Add Build-Depends on python[3]-setuptools.
 
  -- Stein Magnus Jodal <stein.magnus@jodal.no>  Wed, 29 Jul 2015 21:46:22 +0200
 
