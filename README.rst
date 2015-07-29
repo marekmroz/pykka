@@ -169,7 +169,7 @@ the message by simply returning a value from ``on_receive`` method::
 
     actor_ref = Greeter.start()
 
-    answer = actor_ref.ask('Hi?')
+    answer = actor_ref.ask({'msg': 'Hi?'})
     print(answer)
     # => 'Hi there!'
 
@@ -193,7 +193,7 @@ propagate to the sender::
     actor_ref = Raiser.start()
 
     try:
-        actor_ref.ask('How are you?')
+        actor_ref.ask({'msg': 'How are you?'})
     except Exception as e:
         print(repr(e))
         # => Exception('Oops')
@@ -365,6 +365,7 @@ To install the latest development snapshot::
 License
 =======
 
+Pykka is copyright 2010-2015 Stein Magnus Jodal and contributors.
 Pykka is licensed under the `Apache License, Version 2.0
 <http://www.apache.org/licenses/LICENSE-2.0>`_.
 
@@ -377,7 +378,20 @@ Project resources
 - `Issue tracker <https://github.com/jodal/pykka/issues>`_
 - `CI server <https://travis-ci.org/jodal/pykka>`_
 - `Download development snapshot
-  <https://github.com/jodal/pykka/tarball/master#egg=pykka-dev>`_
+  <https://github.com/jodal/pykka/tarball/develop#egg=pykka-dev>`_
 
-.. image:: https://travis-ci.org/jodal/pykka.png?branch=master
+.. image:: https://img.shields.io/pypi/v/Pykka.svg?style=flat
+    :target: https://pypi.python.org/pypi/Pykka/
+    :alt: Latest PyPI version
+
+.. image:: https://img.shields.io/pypi/dm/Pykka.svg?style=flat
+    :target: https://pypi.python.org/pypi/Pykka/
+    :alt: Number of PyPI downloads
+
+.. image:: https://img.shields.io/travis/jodal/pykka/develop.svg?style=flat
     :target: https://travis-ci.org/jodal/pykka
+    :alt: Travis CI build status
+
+.. image:: https://img.shields.io/coveralls/jodal/pykka/develop.svg?style=flat
+   :target: https://coveralls.io/r/jodal/pykka?branch=develop
+   :alt: Test coverage
