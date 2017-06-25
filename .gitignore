@@ -11,3 +11,5 @@ dist/
 docs/_build/*
 nosetests.xml
 xunit-*.xml
+.idea/
+venv/
